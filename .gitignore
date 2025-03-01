@@ -1,0 +1,13 @@
+# Ignore Terraform provider cache
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+.DS_Store
+
+# Ignore provider binaries
+terraform/providers/
+terraform/providers/registry.terraform.io/
+
+# Ignore temporary files
+*.log
+*.bak

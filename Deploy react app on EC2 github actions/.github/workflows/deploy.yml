@@ -1,0 +1,61 @@
+name: Deploy React App to EC2
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Node.js and Dependencies
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Dependencies & Build
+        run: |
+          npm install
+          npm run build
+          tar -czvf build.tar.gz -C build .
+
+      - name: Copy Files to EC2
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: "ec2-user"
+        run: |
+          echo "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          scp -o StrictHostKeyChecking=no -i private_key.pem build.tar.gz $EC2_USER@$EC2_HOST:/home/ec2-user/
+          
+      - name: Deploy on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+          sudo rm -rf /var/www/react-app
+          sudo mkdir -p /var/www/react-app
+          sudo tar -xvzf /home/ec2-user/build.tar.gz -C /var/www/react-app
+          sudo rm /home/ec2-user/build.tar.gz
+          
+          # Configure Nginx
+          sudo bash -c 'cat <<EOL > /etc/nginx/conf.d/react-app.conf
+          server {
+              listen 80;
+              server_name _;
+              
+              root /var/www/react-app;
+              index index.html;
+              
+              location / {
+                  try_files \$uri /index.html;
+              }
+          }
+          EOL'
+          
+          sudo systemctl restart nginx
+          EOF
